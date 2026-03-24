@@ -16,22 +16,29 @@ load_dotenv()
 _DEFAULT_API_KEY = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
 
 def get_model(api_key: str):
-    """Return a Gemini model client using the modern google-genai SDK."""
+    """Securely initialize the Gemini 2.0 Client."""
     try:
         from google import genai
-        client = genai.Client(api_key=api_key)
+        # Clean the API key (removes accidental spaces or quotes)
+        clean_key = api_key.strip().replace('"', '').replace("'", "")
+        client = genai.Client(api_key=clean_key)
         return client
-    except ImportError:
-        st.error("Missing 'google-genai' library. Please update requirements.txt.")
+    except Exception as e:
+        st.error("🔧 **System Tuning:** We're having trouble connecting to the brain. Check your Secrets!")
         st.stop()
 
 def call_model(client, prompt: str) -> str:
-    """Call the model using the gemini-2.0-flash model on the new SDK."""
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt
-    )
-    return response.text
+    """Standardized call to the most stable Flash model."""
+    try:
+        # We use 'gemini-2.0-flash' - it's the most reliable for the new SDK
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt
+        )
+        return response.text
+    except Exception as e:
+        # If the API itself is tired, we pass the error up to the retry logic
+        raise e
 
 # ─── Page Configuration ────────────────────────────────────
 st.set_page_config(
