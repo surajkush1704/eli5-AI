@@ -392,11 +392,11 @@ if clicked:
         st.warning("⬆️ Type something above first! 🤔")
         st.stop()
 
-    # Models to try in order — most reliable free-tier first
+    # Models to try in order — available on this key
     MODELS = [
-        "gemini-1.5-flash",
+        "gemini-2.0-flash-lite",   # lowest quota usage
         "gemini-2.0-flash",
-        "gemini-2.0-flash-lite",
+        "gemini-2.5-flash",
     ]
 
     def try_generate(prompt_text):
@@ -414,7 +414,7 @@ if clicked:
                     e_str = str(exc).lower()
                     is_rate = any(k in e_str for k in [
                         "quota", "resource_exhausted", "429", "too many requests",
-                        "rateerror", "rate_limit"
+                        "rateerror", "rate_limit", "retrydelay"
                     ])
                     is_auth = any(k in e_str for k in [
                         "api_key_invalid", "401", "403", "unauthenticated",
@@ -423,7 +423,7 @@ if clicked:
                     if is_auth:
                         raise exc  # No point retrying auth errors
                     if is_rate and attempt == 0:
-                        time.sleep(3)  # Short wait before retry on same model
+                        time.sleep(10)  # Wait matching Gemini's retryDelay
                         continue
                     last_err = exc
                     break  # Move to next model
