@@ -256,7 +256,7 @@ def show_limit_screen():
     <div class="limit-card">
       <div style="font-size:3.5rem;">⏳</div>
       <div style="font-family:'Cinzel',serif; font-size:1.5rem; color:#E0E0F0; margin:0.5rem 0;">
-        All 5 explanations used!
+        All 20 explanations used!
       </div>
       <div style="color:#777; margin-bottom:1rem;">Your brain needs a rest too 😄</div>
       <div class="countdown">{hrs:02d} : {mins:02d} : {secs:02d}</div>
@@ -266,9 +266,16 @@ def show_limit_screen():
     </div>
     """, unsafe_allow_html=True)
     st.info(f"💡 Did you know? {facts[int(time.time() / 5) % len(facts)]}")
-    if st.button("🔄 Check If Reset", use_container_width=True):
-        maybe_reset()
-        st.rerun()
+    col_a, col_b = st.columns(2)
+    with col_a:
+        if st.button("🔄 Check If Reset", use_container_width=True):
+            maybe_reset()
+            st.rerun()
+    with col_b:
+        if st.button("♻️ Reset My Count", use_container_width=True):
+            st.session_state.usage_count = 0
+            st.session_state.reset_at = time.time() + 3600
+            st.rerun()
 
 
 # ════════════════════════════════════════════════════════════
@@ -280,28 +287,30 @@ st.markdown("""
 <div style="text-align:center; padding:2rem 0 1rem;">
   <div class="hero-title">🧠 ELI5 AI</div>
   <div class="hero-sub">Complex things. Simple words.</div>
-  <span class="hero-badge">⚡ 5 free explanations per hour</span>
+  <span class="hero-badge">⚡ 20 free explanations per hour</span>
 </div>
 """, unsafe_allow_html=True)
 
 # ── USAGE BAR ─────────────────────────────────────────────
+LIMIT = 20
 count = st.session_state.usage_count
-filled = "▓" * count + "░" * (5 - count)
-bar_color = "#4ADE80" if count <= 2 else ("#FBBF24" if count <= 4 else "#F87171")
+blocks = min(count, LIMIT)
+filled = "▓" * blocks + "░" * (LIMIT - blocks)
+bar_color = "#4ADE80" if count <= 8 else ("#FBBF24" if count <= 16 else "#F87171")
 st.markdown(f"""
 <div style="text-align:center; margin-bottom:0.5rem;">
   <span style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08);
     border-radius:50px; padding:0.3rem 1rem; font-size:0.85rem; color:#999;">
-    {count} of 5 used &nbsp;
-    <span style="color:{bar_color}; letter-spacing:2px;">{filled}</span>
+    {count} of {LIMIT} used &nbsp;
+    <span style="color:{bar_color}; letter-spacing:1px; font-size:0.7rem;">{filled}</span>
   </span>
 </div>
 """, unsafe_allow_html=True)
-st.progress(count / 5)
+st.progress(min(count / LIMIT, 1.0))
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ── LIMIT CHECK ───────────────────────────────────────────
-if st.session_state.usage_count >= 5:
+if st.session_state.usage_count >= LIMIT:
     show_limit_screen()
     st.stop()
 
