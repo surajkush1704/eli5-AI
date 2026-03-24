@@ -392,16 +392,47 @@ if clicked:
         st.warning("⬆️ Type something above first! 🤔")
         st.stop()
 
+    # Models to try in order — most reliable free-tier first
+    MODELS = [
+        "gemini-1.5-flash",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite",
+    ]
+
+    def try_generate(prompt_text):
+        """Try each model with 2 retries, return (text, model_used) or raise."""
+        last_err = None
+        for model_name in MODELS:
+            for attempt in range(2):
+                try:
+                    resp = client.models.generate_content(
+                        model=model_name,
+                        contents=prompt_text,
+                    )
+                    return resp.text, model_name
+                except Exception as exc:
+                    e_str = str(exc).lower()
+                    is_rate = any(k in e_str for k in [
+                        "quota", "resource_exhausted", "429", "too many requests",
+                        "rateerror", "rate_limit"
+                    ])
+                    is_auth = any(k in e_str for k in [
+                        "api_key_invalid", "401", "403", "unauthenticated",
+                        "permission_denied", "invalid_api_key"
+                    ])
+                    if is_auth:
+                        raise exc  # No point retrying auth errors
+                    if is_rate and attempt == 0:
+                        time.sleep(3)  # Short wait before retry on same model
+                        continue
+                    last_err = exc
+                    break  # Move to next model
+        raise last_err
+
     with st.spinner("Making it simple... ✨"):
         try:
             prompt = build_prompt(topic.strip(), level, style)
-            
-            # MODERN SDK CALL
-            response = client.models.generate_content(
-                model="gemini-2.0-flash",
-                contents=prompt
-            )
-            raw = response.text
+            raw, used_model = try_generate(prompt)
             emoji, explanation, questions = parse_response(raw)
 
             # ✅ Increment ONLY after success
@@ -452,9 +483,20 @@ if clicked:
 
         except Exception as e:
             err = str(e).lower()
-            if any(k in err for k in ["quota", "429", "rate", "exhausted"]):
-                st.error("⏳ Gemini API rate limit hit!")
-                st.info("Wait 1 minute and try again.")
+            is_auth = any(k in err for k in [
+                "api_key_invalid", "401", "403", "unauthenticated",
+                "permission_denied", "invalid_api_key"
+            ])
+            is_rate = any(k in err for k in [
+                "quota", "resource_exhausted", "429", "too many requests",
+                "rateerror", "rate_limit"
+            ])
+            if is_auth:
+                st.error("🔑 Invalid API key! Check your GEMINI_API_KEY in .env")
+                st.info("Get a free key at: https://aistudio.google.com/apikey")
+            elif is_rate:
+                st.error("⏳ Gemini API rate limit hit across all models!")
+                st.info("Wait 1 minute and try again, or upgrade your API key plan.")
             else:
                 st.error(f"❌ Error: {str(e)}")
 
