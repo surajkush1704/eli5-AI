@@ -13,7 +13,23 @@ import os
 
 # ─── Load environment variables ────────────────────────────
 load_dotenv()
-_DEFAULT_API_KEY = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
+
+def get_api_key():
+    """Smart key retrieval: Checks Secrets first (Cloud), then .env (Local)."""
+    try:
+        # 1. Try Streamlit Secrets (Cloud)
+        if "GEMINI_API_KEY" in st.secrets:
+            return st.secrets["GEMINI_API_KEY"]
+    except Exception:
+        # This catch prevents the "SecretsNotFoundError" on localhost
+        pass
+    
+    # 2. Fallback to .env or environment variable (Local)
+    local_key = os.getenv("GEMINI_API_KEY")
+    return local_key if local_key else ""
+
+# Initialize the key safely for both environments
+_DEFAULT_API_KEY = get_api_key()
 
 def get_model(api_key: str):
     """Securely initialize the Gemini 2.0 Client."""
@@ -606,8 +622,12 @@ with st.sidebar:
 def main():
     init_session_state()
 
-    # ── Pick active API key (sidebar override > .env) ────────
+    # ── Pick active API key (sidebar override > smart-retrieval) 
     active_key = st.session_state.get("api_key_input", "").strip() or _DEFAULT_API_KEY
+    
+    # ── DEBUG INJECTION (Uncomment the line below to test key retrieval)
+    st.write(f"🔍 DEBUG: Key starts with: {active_key[:5]} and ends with: {active_key[-3:]}")
+
     if not active_key:
         st.error("⚠️ No API key found. Open the sidebar and paste your Gemini key.")
         st.stop()
