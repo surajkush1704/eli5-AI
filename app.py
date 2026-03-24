@@ -13,7 +13,8 @@ import os
 
 # ─── Load environment variables ────────────────────────────
 load_dotenv()
-_DEFAULT_API_KEY = os.getenv("GEMINI_API_KEY", "")
+# Prioritize Streamlit secrets, then .env, then empty string
+_DEFAULT_API_KEY = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
 
 
 def get_model(api_key: str):
@@ -785,11 +786,22 @@ def main():
 
         except Exception as e:
             err_str = str(e).lower()
-            is_rate = any(k in err_str for k in ["quota", "rate", "429", "resource_exhausted", "too many"])
-            if is_rate:
+            is_auth = any(k in err_str for k in ["api_key_invalid", "api key", "invalid key",
+                                                   "401", "403", "unauthenticated", "permission_denied",
+                                                   "invalid_argument"])
+            is_rate = any(k in err_str for k in ["quota", "resource_exhausted", "429", "too many", "rate limit"])
+            if is_auth:
+                st.error(
+                    "🔑 **API key missing or invalid.** "
+                    "If you're on Streamlit Cloud, add your key to the app's **Secrets** panel "
+                    "(Dashboard → your app → Settings → Secrets)."
+                )
+                st.code('GEMINI_API_KEY = "your-key-here"', language="toml")
+                st.markdown("[Get a free Gemini API key →](https://aistudio.google.com/apikey)")
+            elif is_rate:
                 st.error(
                     "🚦 **Rate limit reached.** The free Gemini tier allows ~15 requests/minute. "
-                    "Please wait a moment and try again, or open the **sidebar** to paste a fresh API key."
+                    "Please wait a moment and try again, or use a different API key."
                 )
                 st.markdown("🔑 [Get a free Gemini API key](https://aistudio.google.com/apikey)")
             else:
