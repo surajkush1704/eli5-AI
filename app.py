@@ -13,44 +13,25 @@ import os
 
 # ─── Load environment variables ────────────────────────────
 load_dotenv()
-# Prioritize Streamlit secrets, then .env, then empty string
 _DEFAULT_API_KEY = st.secrets.get("GEMINI_API_KEY", os.getenv("GEMINI_API_KEY", ""))
 
-
 def get_model(api_key: str):
-    """Return a Gemini model client for the given API key."""
+    """Return a Gemini model client using the modern google-genai SDK."""
     try:
-        from google import genai as _genai  # new SDK
-        client = _genai.Client(api_key=api_key)
-        return client, "new"
+        from google import genai
+        client = genai.Client(api_key=api_key)
+        return client
     except ImportError:
-        import google.generativeai as genai_old
-        genai_old.configure(api_key=api_key)
-        return genai_old.GenerativeModel("gemini-1.5-flash"), "old"
+        st.error("Missing 'google-genai' library. Please update requirements.txt.")
+        st.stop()
 
-
-def call_model(client_or_model, sdk_type: str, prompt: str) -> str:
-    """Call the model and return text, trying multiple models as fallback."""
-    if sdk_type == "new":
-        # Try models in order of preference
-        for model_name in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"]:
-            try:
-                response = client_or_model.models.generate_content(
-                    model=model_name,
-                    contents=prompt
-                )
-                return response.text
-            except Exception as e:
-                err = str(e).lower()
-                # Only fall through on rate/quota errors, not auth/404
-                is_rate = any(k in err for k in ["429", "quota", "resource_exhausted", "too many", "rate"])
-                if is_rate:
-                    continue  # try next model
-                raise  # re-raise non-rate errors immediately
-        raise Exception("All models are rate-limited. Please wait and try again.")
-    else:
-        response = client_or_model.generate_content(prompt)
-        return response.text
+def call_model(client, prompt: str) -> str:
+    """Call the model using the gemini-2.0-flash model on the new SDK."""
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt
+    )
+    return response.text
 
 # ─── Page Configuration ────────────────────────────────────
 st.set_page_config(
@@ -624,7 +605,7 @@ def main():
         st.error("⚠️ No API key found. Open the sidebar and paste your Gemini key.")
         st.stop()
 
-    _client, _sdk = get_model(active_key)
+    client = get_model(active_key)
 
     # ── HERO HEADER ──────────────────────────────────────────
     st.markdown(
@@ -721,7 +702,7 @@ def main():
             """Call Gemini with exponential backoff on rate limit errors."""
             for attempt in range(max_retries):
                 try:
-                    return call_model(_client, _sdk, prompt_text)
+                    return call_model(client, prompt_text)
                 except Exception as exc:
                     err = str(exc).lower()
                     is_rate_err = any(k in err for k in ["quota", "rate", "429", "resource_exhausted", "too many"])
