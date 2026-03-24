@@ -5,16 +5,17 @@
 # ============================================================
 
 import streamlit as st
-import google.generativeai as genai
 import json
 import time
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import os
 
-# ─── Load API Key ──────────────────────────────────────────
+# ─── Load environment variables ────────────────────────────
 load_dotenv()
 
 def get_api_key():
+    """Smart key retrieval: Checks Secrets first (Cloud), then .env (Local)."""
     try:
         if "GEMINI_API_KEY" in st.secrets:
             return st.secrets["GEMINI_API_KEY"]
@@ -308,14 +309,12 @@ if st.session_state.usage_count >= 5:
 api_key = get_api_key()
 if not api_key:
     st.error("⚠️ No Gemini API key found!")
-    st.info("Add GEMINI_API_KEY to your .env file and restart the app.")
-    st.code('GEMINI_API_KEY=your_key_here', language="bash")
     st.stop()
 
-# Configure Gemini
+# ── MODERN GENAI INITIALIZATION ───────────────────────────
 try:
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash")
+    from google import genai
+    client = genai.Client(api_key=api_key)
 except Exception as e:
     st.error(f"❌ Could not connect to Gemini: {e}")
     st.stop()
@@ -384,14 +383,15 @@ if clicked:
         st.warning("⬆️ Type something above first! 🤔")
         st.stop()
 
-    if st.session_state.usage_count >= 5:
-        st.rerun()
-        st.stop()
-
     with st.spinner("Making it simple... ✨"):
         try:
             prompt = build_prompt(topic.strip(), level, style)
-            response = model.generate_content(prompt)
+            
+            # MODERN SDK CALL
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt
+            )
             raw = response.text
             emoji, explanation, questions = parse_response(raw)
 
@@ -445,13 +445,7 @@ if clicked:
             err = str(e).lower()
             if any(k in err for k in ["quota", "429", "rate", "exhausted"]):
                 st.error("⏳ Gemini API rate limit hit!")
-                st.info("""
-**This is a Gemini free tier limit — not our 5-search limit.**
-
-Fix options:
-1. **Wait 1 minute** and try again
-2. **Get your own free API key** from [aistudio.google.com](https://aistudio.google.com/apikey) and add it to your .env file
-                """)
+                st.info("Wait 1 minute and try again.")
             else:
                 st.error(f"❌ Error: {str(e)}")
 
